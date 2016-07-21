@@ -1,13 +1,16 @@
 package main
 
 import (
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"testing"
 
+	"github.com/digitalrebar/go-common/store"
 	dhcp "github.com/krolaw/dhcp4"
 	"github.com/stretchr/testify/assert"
+	"github.com/willf/bitset"
 )
 
 func newSubnet(dt *DataTracker, name, subnet string) (s *Subnet) {
@@ -17,6 +20,7 @@ func newSubnet(dt *DataTracker, name, subnet string) (s *Subnet) {
 	s.Subnet = &MyIPNet{theNet}
 	s.ActiveStart = dhcp.IPAdd(theNet.IP, 5)
 	s.ActiveEnd = dhcp.IPAdd(theNet.IP, 25)
+	s.ActiveBits = bitset.New(uint(dhcp.IPRange(s.ActiveStart, s.ActiveEnd)))
 	return
 }
 
@@ -27,11 +31,16 @@ func addNewSubnet(dt *DataTracker, name, subnet string) (s *Subnet, err error, c
 }
 
 func simpleSetup() (dt *DataTracker, s *Subnet) {
-	store, err := NewFileStore("./database.test.json")
+	ms := store.NewSimpleMemoryStore()
+	buf, err := ioutil.ReadFile("./database.test.json")
 	if err != nil {
 		log.Panic(err)
 	}
-	dt = NewDataTracker(store)
+	ms.Save("subnets", buf)
+	if err != nil {
+		log.Panic(err)
+	}
+	dt = NewDataTracker(ms)
 	s, _, _ = addNewSubnet(dt, "fred", "192.168.128.0/24")
 	dt.AddSubnet(s)
 	return
@@ -160,11 +169,16 @@ func TestReplaceSubnetMustNotOverlap(t *testing.T) {
 }
 
 func TestFindSubnetEmpty(t *testing.T) {
-	store, err := NewFileStore("./database.test.json")
+	ms := store.NewSimpleMemoryStore()
+	buf, err := ioutil.ReadFile("./database.test.json")
 	if err != nil {
 		log.Panic(err)
 	}
-	dt := NewDataTracker(store)
+	ms.Save("subnets", buf)
+	if err != nil {
+		log.Panic(err)
+	}
+	dt := NewDataTracker(ms)
 
 	s := dt.FindSubnet(net.ParseIP("0.0.0.0"))
 	assert.Nil(t, s, "Expected nil subnets")
@@ -234,7 +248,7 @@ func TestSubnetOverlapOutside(t *testing.T) {
 
 func TestAddBindingMissing(t *testing.T) {
 	dt, s := simpleSetup()
-	b := NewBinding()
+	b := &Binding{}
 	b.Mac = "macit"
 	b.Ip = net.ParseIP("192.168.128.10")
 
@@ -250,7 +264,7 @@ func TestAddBinding(t *testing.T) {
 
 	assert.Equal(t, s.ActiveBits.Any(), false, "No bits should be set")
 
-	b := NewBinding()
+	b := &Binding{}
 	b.Mac = "macit"
 	b.Ip = net.ParseIP("192.168.128.10")
 
@@ -270,14 +284,14 @@ func TestAddBindingReplace(t *testing.T) {
 
 	assert.Equal(t, s.ActiveBits.Any(), false, "No bits should be set")
 
-	b := NewBinding()
+	b := &Binding{}
 	b.Mac = "macit"
 	b.Ip = net.ParseIP("192.168.128.10")
 	dt.AddBinding("fred", *b)
 
 	assert.Equal(t, s.ActiveBits.Test(5), true, "bit 5 should be set")
 
-	b2 := NewBinding()
+	b2 := &Binding{}
 	b2.Mac = "macit"
 	b2.Ip = net.ParseIP("192.168.128.16")
 	err, code := dt.AddBinding("fred", *b2)
@@ -296,7 +310,7 @@ func TestAddBindingReplace(t *testing.T) {
 func TestDeleteBindingMissingSubnet(t *testing.T) {
 	dt, s := simpleSetup()
 
-	b := NewBinding()
+	b := &Binding{}
 	b.Mac = "macit"
 	b.Ip = net.ParseIP("192.168.128.10")
 	dt.AddBinding("fred", *b)
@@ -314,7 +328,7 @@ func TestDeleteBindingMissingSubnet(t *testing.T) {
 func TestDeleteBindingMissingBinding(t *testing.T) {
 	dt, s := simpleSetup()
 
-	b := NewBinding()
+	b := &Binding{}
 	b.Mac = "macit"
 	b.Ip = net.ParseIP("192.168.128.10")
 	dt.AddBinding("fred", *b)
@@ -332,7 +346,7 @@ func TestDeleteBindingMissingBinding(t *testing.T) {
 func TestDeleteBinding(t *testing.T) {
 	dt, s := simpleSetup()
 
-	b := NewBinding()
+	b := &Binding{}
 	b.Mac = "macit"
 	b.Ip = net.ParseIP("192.168.128.10")
 	dt.AddBinding("fred", *b)
@@ -364,7 +378,7 @@ func TestSetNextServerMissing(t *testing.T) {
 func TestSetNextServer(t *testing.T) {
 	dt, s := simpleSetup()
 
-	b := NewBinding()
+	b := &Binding{}
 	b.Mac = "macit"
 	b.Ip = net.ParseIP("192.168.128.10")
 	dt.AddBinding("fred", *b)
