@@ -24,7 +24,7 @@ Returns: a json array of subnet objects
     "next_server": [[]]
     "active_start": "192.168.124.22",
     "active_end": "192.168.124.92",
-    "active_lease_time": 30,
+    "active_lease_time": 300,
     "reserved_lease_time": 7200,
     "leases": [
       {
@@ -115,7 +115,7 @@ Data is in the format:
     "next_server": "192.168.124.10",
     "active_start": "192.168.124.22",
     "active_end": "192.168.124.92",
-    "active_lease_time": 30,
+    "active_lease_time": 300,
     "reserved_lease_time": 7200
 }
 ```
@@ -204,28 +204,6 @@ The next server object looks like:
 ```
 
 
-# Build
-
-go get -u github.com/galthaus/rebar-dhcp  
-go install github.com/galthaus/rebar-dhcp
-
-# Installing
-
-The following things need to be done to run the micro-service.
-From the source directory, do the following.
-
-* cp config/config.gcfg /etc/rebar-dhcp.conf
-* You will need a https-cert.pem and https-key.pem.
-```
-openssl req -nodes -sha256 -x509 -newkey rsa:2048 \
-   -keyout https-key.pem -out https-cert.pem -days 1001 \
-   -subj "/C=US/ST=Denial/L=Anytown/O=Dis/CN=admin"
-```
-* cp https-key.pem /etc/rebar-dhcp-https-key.pem
-* cp https-cert.pem /etc/rebar-dhcp-https-cert.pem
-
-NOTE: Sometimes certs need addition configuration to deal with names or IPs.
-
 # Testing
 
 To run the unit tests:
@@ -238,23 +216,4 @@ To get coverage:
 * go test -coverprofile=cover.out
 * sed -i -e "s#.*/\(.*\.go\)#\./\\1#" cover.out 
 * go tool cover -html=cover.out -o coverage.html
-
-# Running
-
-```
-$GOPATH/bin/rebar-dhcp
-```
-
-# Config Syntax
-
-Here is an example:
-```
-; The port
-[network]
-port = 6755
-username = admin
-password = admin
-```
-
-The network section specifies the parameters for the API endpoint.  Access creds and listening port can be specifed.
 

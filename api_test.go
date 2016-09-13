@@ -1,41 +1,41 @@
 package main
 
 import (
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/digitalrebar/go-common/store"
 	"github.com/stretchr/testify/assert"
 )
 
-func base_url(path string) string {
+func baseUrl(path string) string {
 	return "http://127.0.0.1:6755" + path
 }
 
-func get_frontend() (*Frontend, http.Handler) {
-	cfg := Config{}
-	cfg.Network.Port = 6755
-	cfg.Network.Username = "fred"
-	cfg.Network.Password = "rules"
-	fs, err := NewFileStore("./database.test.json")
+func getFrontend() (*Frontend, http.Handler) {
+	ms := store.NewSimpleMemoryStore()
+	buf, err := ioutil.ReadFile("./database.test.json")
 	if err != nil {
 		log.Panic(err)
 	}
-	the_fe := NewFrontend("", "", cfg, fs)
-	handler := the_fe.RunServer(false)
-	return the_fe, handler
+	ms.Save("subnets", buf)
+	theFe := NewFrontend(ms)
+	handler := theFe.RunServer(false)
+	return theFe, handler
 }
 
 func TestRequestBadAuth(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets")
+	url := baseUrl("/subnets")
 	req, err := http.NewRequest("GET", url, nil)
 	assert.Nil(t, err)
-	req.SetBasicAuth("greg", "drools")
+	req.Header.Set("X-Authenticated-Capability", "{}")
 
 	// Clear all subnets
 	for k := range fe.DhcpInfo.Subnets {
@@ -49,10 +49,10 @@ func TestRequestBadAuth(t *testing.T) {
 }
 
 func TestGetAllSubnets(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets")
+	url := baseUrl("/subnets")
 	req, err := http.NewRequest("GET", url, nil)
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -71,10 +71,10 @@ func TestGetAllSubnets(t *testing.T) {
 // GREG: Add getall with a subnet
 
 func TestGetSubnetMissing(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb")
+	url := baseUrl("/subnets/jeb")
 	req, err := http.NewRequest("GET", url, nil)
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -93,10 +93,10 @@ func TestGetSubnetMissing(t *testing.T) {
 // GREG: Add get with a subnet
 
 func TestCreateSubnetBadConvert(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets")
+	url := baseUrl("/subnets")
 	req, err := http.NewRequest("POST", url, strings.NewReader("{ \"name\": \"ffeedd\", \"subnet\": \"192k.168.124.0/24\", \"active_start\": \"192.168.124.10\", \"active_end\": \"192.168.124.100\"}"))
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -114,10 +114,10 @@ func TestCreateSubnetBadConvert(t *testing.T) {
 }
 
 func TestCreateSubnetBadJson(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets")
+	url := baseUrl("/subnets")
 	req, err := http.NewRequest("POST", url, strings.NewReader("greg"))
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -135,10 +135,10 @@ func TestCreateSubnetBadJson(t *testing.T) {
 }
 
 func TestCreateSubnetNoPayload(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets")
+	url := baseUrl("/subnets")
 	req, err := http.NewRequest("POST", url, nil)
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -158,10 +158,10 @@ func TestCreateSubnetNoPayload(t *testing.T) {
 // GREG: Add create test
 
 func TestUpdateSubnetNoPayload(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb")
+	url := baseUrl("/subnets/jeb")
 	req, err := http.NewRequest("PUT", url, nil)
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -179,10 +179,10 @@ func TestUpdateSubnetNoPayload(t *testing.T) {
 }
 
 func TestUpdateSubnetBadConvert(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb")
+	url := baseUrl("/subnets/jeb")
 	req, err := http.NewRequest("PUT", url, strings.NewReader("{ \"name\": \"ffeedd\", \"subnet\": \"192k.168.124.0/24\", \"active_start\": \"192.168.124.10\", \"active_end\": \"192.168.124.100\"}"))
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -200,10 +200,10 @@ func TestUpdateSubnetBadConvert(t *testing.T) {
 }
 
 func TestUpdateSubnetBadJson(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb")
+	url := baseUrl("/subnets/jeb")
 	req, err := http.NewRequest("PUT", url, strings.NewReader("greg"))
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -221,10 +221,10 @@ func TestUpdateSubnetBadJson(t *testing.T) {
 }
 
 func TestUpdateSubnetMissing(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb")
+	url := baseUrl("/subnets/jeb")
 	req, err := http.NewRequest("PUT", url, strings.NewReader("{ \"name\": \"ffeedd\", \"subnet\": \"192.168.124.0/24\", \"active_start\": \"192.168.124.10\", \"active_end\": \"192.168.124.100\"}"))
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -244,10 +244,10 @@ func TestUpdateSubnetMissing(t *testing.T) {
 // GREG: Add update test
 
 func TestDeleteSubnetMissing(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb")
+	url := baseUrl("/subnets/jeb")
 	req, err := http.NewRequest("DELETE", url, nil)
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -266,10 +266,10 @@ func TestDeleteSubnetMissing(t *testing.T) {
 // GREG: Add delete test
 
 func TestPostBindingNoPayload(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb/bind")
+	url := baseUrl("/subnets/jeb/bind")
 	req, err := http.NewRequest("POST", url, nil)
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -287,10 +287,10 @@ func TestPostBindingNoPayload(t *testing.T) {
 }
 
 func TestPostBindingBadJson(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb/bind")
+	url := baseUrl("/subnets/jeb/bind")
 	req, err := http.NewRequest("POST", url, strings.NewReader("greg"))
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -308,10 +308,10 @@ func TestPostBindingBadJson(t *testing.T) {
 }
 
 func TestPostBindingSubnetMissing(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb/bind")
+	url := baseUrl("/subnets/jeb/bind")
 	req, err := http.NewRequest("POST", url, strings.NewReader("{}"))
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -331,10 +331,10 @@ func TestPostBindingSubnetMissing(t *testing.T) {
 // GREG: Add bind test
 
 func TestDeleteBindingSubnetMissing(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb/bind/aa:ee:ff:11:32:22")
+	url := baseUrl("/subnets/jeb/bind/aa:ee:ff:11:32:22")
 	req, err := http.NewRequest("DELETE", url, nil)
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -354,10 +354,10 @@ func TestDeleteBindingSubnetMissing(t *testing.T) {
 // GREG: Add bind delete
 
 func TestPutNextServerNoPayload(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb/next_server/1.1.1.1")
+	url := baseUrl("/subnets/jeb/next_server/1.1.1.1")
 	req, err := http.NewRequest("PUT", url, nil)
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -375,10 +375,10 @@ func TestPutNextServerNoPayload(t *testing.T) {
 }
 
 func TestPutNextServerBadJson(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb/next_server/1.1.1.1")
+	url := baseUrl("/subnets/jeb/next_server/1.1.1.1")
 	req, err := http.NewRequest("PUT", url, strings.NewReader("greg"))
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")
@@ -396,10 +396,10 @@ func TestPutNextServerBadJson(t *testing.T) {
 }
 
 func TestPutNextServerMissingSubnet(t *testing.T) {
-	fe, handler := get_frontend()
+	fe, handler := getFrontend()
 
 	recorder := httptest.NewRecorder()
-	url := base_url("/subnets/jeb/next_server/1.1.1.1")
+	url := baseUrl("/subnets/jeb/next_server/1.1.1.1")
 	req, err := http.NewRequest("PUT", url, strings.NewReader("{}"))
 	assert.Nil(t, err)
 	req.SetBasicAuth("fred", "rules")

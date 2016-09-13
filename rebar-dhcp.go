@@ -4,46 +4,60 @@ import (
 	"flag"
 	"log"
 
-	"code.google.com/p/gcfg"
+	"github.com/digitalrebar/go-common/store"
+	"github.com/digitalrebar/go-common/version"
+	consul "github.com/hashicorp/consul/api"
 )
 
-type Config struct {
-	Network struct {
-		Port     int
-		Username string
-		Password string
-	}
-}
-
-var ignore_anonymus bool
-var config_path, key_pem, cert_pem, data_dir string
-var server_ip string
+var ignoreAnonymus bool
+var dataDir string
+var backingStore string
+var serverIp string
+var hostString string
+var serverPort int
+var versionFlag bool
 
 func init() {
-	flag.StringVar(&config_path, "config_path", "/etc/rebar-dhcp.conf", "Path to config file")
-	flag.StringVar(&key_pem, "key_pem", "/etc/dhcp-https-key.pem", "Path to key file")
-	flag.StringVar(&cert_pem, "cert_pem", "/etc/dhcp-https-cert.pem", "Path to cert file")
-	flag.StringVar(&data_dir, "data_dir", "/var/cache/rebar-dhcp", "Path to store data")
-	flag.StringVar(&server_ip, "server_ip", "", "Server IP to return in packets (e.g. 10.10.10.1/24)")
-	flag.BoolVar(&ignore_anonymus, "ignore_anonymus", false, "Ignore unknown MAC addresses")
+	flag.BoolVar(&versionFlag, "version", false, "Print version and exit")
+	flag.StringVar(&dataDir, "dataDir", "/var/cache/rebar-dhcp", "Path to store data.")
+	flag.StringVar(&serverIp, "serverIp", "", "Server IP to return in packets (e.g. 10.10.10.1/24)")
+	flag.StringVar(&backingStore, "backingStore", "file", "Backing store to use. Either 'consul' or 'file'")
+	flag.BoolVar(&ignoreAnonymus, "ignoreAnonymus", false, "Ignore unknown MAC addresses")
+	flag.StringVar(&hostString, "host", "dhcp,dhcp-mgmt,localhost,127.0.0.1", "Comma separated list of hosts to put in certificate")
+	flag.IntVar(&serverPort, "port", 6755, "Management access port")
 }
 
 func main() {
 	flag.Parse()
 
-	var cfg Config
-	cerr := gcfg.ReadFileInto(&cfg, config_path)
-	if cerr != nil {
-		log.Fatal(cerr)
+	if versionFlag {
+		log.Fatalf("Version: %s", version.REBAR_VERSION)
 	}
-	fs, err := NewFileStore(data_dir + "/database.json")
-	if err != nil {
-		log.Fatal(err)
+	log.Printf("Version: %s\n", version.REBAR_VERSION)
+
+	var bs store.SimpleStore
+	switch backingStore {
+	case "file":
+		var err error
+		bs, err = store.NewSimpleLocalStore(dataDir)
+		if err != nil {
+			log.Fatal(err)
+		}
+	case "consul":
+		c, err := consul.NewClient(consul.DefaultConfig())
+		if err == nil {
+			bs, err = store.NewSimpleConsulStore(c, dataDir)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+	default:
+		log.Fatalf("Unknown backing store type %s", backingStore)
 	}
 
-	fe := NewFrontend(cert_pem, key_pem, cfg, fs)
+	fe := NewFrontend(bs)
 
-	if err := StartDhcpHandlers(fe.DhcpInfo, server_ip); err != nil {
+	if err := StartDhcpHandlers(fe.DhcpInfo, serverIp); err != nil {
 		log.Fatal(err)
 	}
 	fe.RunServer(true)
